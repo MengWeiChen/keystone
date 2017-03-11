@@ -61,6 +61,7 @@ module.exports = Field.create({
 					options={options}
 					onChange={this.valueChanged}
 				/>
+				test
 			</div>
 		);
 	},
