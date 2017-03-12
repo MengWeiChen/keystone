@@ -14,6 +14,9 @@ import {
 } from '../../../admin/client/App/elemental';
 import FileChangeMessage from '../../components/FileChangeMessage';
 import HiddenFileInput from '../../components/HiddenFileInput';
+import ImageThumbnail from '../../components/ImageThumbnail';
+import Lightbox from 'react-images';
+
 
 let uploadInc = 1000;
 
@@ -22,6 +25,9 @@ const buildInitialState = (props) => ({
 	removeExisting: false,
 	uploadFieldPath: `File-${props.path}-${++uploadInc}`,
 	userSelectedFile: null,
+	dataUri: null,
+	loading: false,
+	lightboxIsVisible: false,
 });
 
 module.exports = Field.create({
@@ -81,12 +87,56 @@ module.exports = Field.create({
 	triggerFileBrowser () {
 		this.refs.fileInput.clickDomNode();
 	},
+	isImage () {
+		const str = this.state.userSelectedFile ? this.state.userSelectedFile.type : this.props.value ? this.props.value.mimetype : '';
+		const SUPPORTED_REGEX = new RegExp(/^image\/|application\/pdf|application\/postscript/g);
+		try {
+			return (str.match(SUPPORTED_REGEX));
+		}
+		catch (err) {
+			return false;
+		}
+
+	},
 	handleFileChange (event) {
 		const userSelectedFile = event.target.files[0];
 
 		this.setState({
 			userSelectedFile: userSelectedFile,
 		});
+
+
+		if (!window.FileReader) {
+			return alert('File reader not supported by browser.');
+		}
+
+		var reader = new FileReader();
+		if (!userSelectedFile) return;
+
+		/*
+		if (this.isImage(userSelectedFile.filename)) {
+			this.setState({
+				dataUri: null,
+				loading: false,
+			});
+			return;
+		}
+		*/
+
+		reader.readAsDataURL(userSelectedFile);
+
+		reader.onloadstart = () => {
+			this.setState({
+				loading: true,
+			});
+		};
+		reader.onloadend = (upload) => {
+			this.setState({
+				dataUri: upload.target.result,
+				loading: false,
+			});
+			// this.props.onChange({ file: userSelectedFile });
+		};
 	},
 	handleRemove (e) {
 		var state = {};
@@ -190,6 +240,62 @@ module.exports = Field.create({
 			return null;
 		}
 	},
+	hasLocal () {
+		return !!this.state.userSelectedFile;
+	},
+	renderImagePreview () {
+		// const { value } = this.props;
+		console.log(this.props.value);
+		// render icon feedback for intent
+		let mask;
+		if (this.hasLocal()) mask = 'upload';
+		else if (this.state.removeExisting) mask = 'remove';
+		else if (this.state.loading) mask = 'loading';
+
+		// const shouldOpenLightbox = value.format !== 'pdf';
+
+		return (
+			<ImageThumbnail
+				component="a"
+				href={this.state.dataUri ? this.state.dataUri : this.props.value.url}
+				onClick={this.openLightbox}
+				mask={mask}
+				target="__blank"
+				style={{ float: 'left', marginRight: '1em' }}
+			>
+				<img src={this.state.dataUri ? this.state.dataUri : this.props.value.url} style={{ height: 90 }} />
+			</ImageThumbnail>
+		);
+	},
+	openLightbox (event) {
+		event.preventDefault();
+		this.setState({
+			lightboxIsVisible: true,
+		});
+	},
+	closeLightbox () {
+		this.setState({
+			lightboxIsVisible: false,
+		});
+	},
+	renderLightbox () {
+		/*
+		const { value } = this.props;
+
+		if (!value || !value.public_id) return;
+		*/
+
+
+		return (
+			<Lightbox
+				currentImage={0}
+				images={[{ src: this.state.dataUri ? this.state.dataUri : this.props.value.url }]}
+				isOpen={this.state.lightboxIsVisible}
+				onClose={this.closeLightbox}
+				showImageCount={false}
+			/>
+		);
+	},
 	renderUI () {
 		const { label, note, path } = this.props;
 		const buttons = (
@@ -200,10 +306,13 @@ module.exports = Field.create({
 				{this.hasFile() && this.renderClearButton()}
 			</div>
 		);
-
+		// console.log()
 		return (
 			<div data-field-name={path} data-field-type="file">
 				<FormField label={label} htmlFor={path}>
+					{this.hasFile() && this.isImage() ? (
+						this.renderImagePreview()
+					) : (null)}
 					{this.shouldRenderField() ? (
 						<div>
 							{this.hasFile() && this.renderFileNameAndChangeMessage()}
@@ -224,6 +333,7 @@ module.exports = Field.create({
 						</div>
 					)}
 					{!!note && <FormNote html={note} />}
+					{this.renderLightbox()}
 				</FormField>
 			</div>
 		);
